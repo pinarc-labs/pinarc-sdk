@@ -33,12 +33,12 @@ export type LaunchParams = {
   tradeFeeBps: bigint | number;
 };
 
-/** Platform defaults at launch (PinarcConfig on mainnet, September 2026). */
+/** Platform defaults (PinarcConfig on mainnet since block 65,558,085, 2026-09-18: graduation lowered from 12,400 to 2,500 USDG). */
 export const DEFAULT_LAUNCH_PARAMS: LaunchParams = {
   virtualTokens: 1_073_000_000n * 10n ** 18n,
   curveSupply: 800_000_000n * 10n ** 18n,
   lpSupply: 200_000_000n * 10n ** 18n,
-  graduationUsdg: 12_400n * 10n ** 6n,
+  graduationUsdg: 2_500n * 10n ** 6n,
   teamAllocation: 0n,
   tradeFeeBps: 100,
 };

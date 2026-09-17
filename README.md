@@ -19,18 +19,18 @@ pnpm add @pinarc-labs/sdk @pinarc-labs/robinhood-chain-kit viem
 ```ts
 import { DEFAULT_LAUNCH_PARAMS, initialState, quoteBuy, quoteSell, applyBuy, graduationPlan } from "@pinarc-labs/sdk";
 
-const s = initialState(DEFAULT_LAUNCH_PARAMS);          // a fresh curve: 800M on the curve, graduates at 12,400 USDG
+const s = initialState(DEFAULT_LAUNCH_PARAMS);          // a fresh curve: 800M on the curve, graduates at 2,500 USDG
 const q = quoteBuy(s, 100_000000n);                      // 100 USDG (6 decimals)
-q.tokensOut;        // 24,5xx,xxx tokens (18 decimals)
+q.tokensOut;        // ≈111.6M tokens (18 decimals)
 q.fee;              // 1 USDG
-q.priceImpactBps;   // ~233
+q.priceImpactBps;   // ~1160
 q.graduates;        // false
 
 const after = applyBuy(s, q);
 quoteSell(after, q.tokensOut).usdgOut;                   // a little under 98 USDG (1% fee each way + rounding)
 
-graduationPlan(s, { graduationFeeBps: 200, floorBps: 1500, lpSupply: DEFAULT_LAUNCH_PARAMS.lpSupply, totalSupply: 1_000_000_000n * 10n ** 18n });
-// { raised: 12400 USDG, graduationFee: 248, floorUsdg: 1860, liquidityUsdg: 10292, marketCapUsdg: ~60.9k, poolPrice18, floorPrice18 }
+graduationPlan(s, { graduationFeeBps: 200, floorBps: 1000, lpSupply: DEFAULT_LAUNCH_PARAMS.lpSupply, totalSupply: 1_000_000_000n * 10n ** 18n });
+// { raised: 2500 USDG, graduationFee: 50, floorUsdg: 250, liquidityUsdg: 2200, marketCapUsdg: ~12.28k, poolPrice18: 0.000011, floorPrice18 }
 ```
 
 The same functions run in the app's launch simulator; `pnpm test:live` checks them against the contracts on mainnet.

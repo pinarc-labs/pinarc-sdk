@@ -9,7 +9,7 @@ describe.skipIf(!process.env.PINARC_LIVE)("live", () => {
     const publicClient = createPublicClient({ chain: robinhoodChain, transport: createFallbackTransport() });
     const pinarc = createPinarcClient({ publicClient, addresses: MAINNET });
     const cfg = await pinarc.getConfig();
-    expect(cfg.curve.graduationUsdg).toBe(12_400n * 10n ** 6n);
+    expect(cfg.curve.graduationUsdg).toBe(2_500n * 10n ** 6n);
     const s = initialState({ ...cfg.curve, tradeFeeBps: cfg.fees.tradeFeeBps });
     expect(quoteBuy(s, 10n ** 12n).usdgUsed).toBe(cfg.curve.graduationUsdg);
     const count = await pinarc.getTokenCount();

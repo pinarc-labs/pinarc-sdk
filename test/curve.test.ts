@@ -9,8 +9,8 @@ const TOTAL_SUPPLY = P.curveSupply + P.lpSupply;
 describe("initialState", () => {
   it("derives the virtual USDG reserve so the raise at sell-out is graduationUsdg", () => {
     const s = initialState(P);
-    // 12,400 × (1,073M − 800M) / 800M = 4,231.5 USDG
-    expect(s.virtualUsdg).toBe(USDG(4231.5));
+    // 2,500 × (1,073M − 800M) / 800M = 853.125 USDG
+    expect(s.virtualUsdg).toBe(USDG(853.125));
     expect(s.curveSupply).toBe(P.curveSupply);
     // buying everything costs exactly the graduation raise (net of fees)
     const q = quoteBuy(s, USDG(1_000_000));
@@ -18,7 +18,7 @@ describe("initialState", () => {
     expect(q.tokensOut).toBe(P.curveSupply);
     expect(q.graduates).toBe(true);
     expect(q.refund).toBe(USDG(1_000_000) - q.usdgUsed - q.fee);
-    // fee on a sell-out is charged on what was used: 12,400 × 1% / 99% ≈ 125.25
+    // fee on a sell-out is charged on what was used: 2,500 × 1% / 99% ≈ 25.25
     expect(q.fee).toBe((P.graduationUsdg * 100n) / (BPS - 100n));
   });
   it("takes the team allocation out of the curve and keeps the raise constant", () => {
@@ -36,8 +36,8 @@ describe("initialState", () => {
 describe("prices and quotes", () => {
   const s = initialState(P);
   it("starts at virtualUsdg / virtualTokens", () => {
-    // 4231.5 USDG / 1,073M tokens = 0.00000394361… USDG per token
-    expect(price18(s)).toBe((USDG(4231.5) * 10n ** 30n) / P.virtualTokens);
+    // 853.125 USDG / 1,073M tokens = 0.000000795… USDG per token
+    expect(price18(s)).toBe((USDG(853.125) * 10n ** 30n) / P.virtualTokens);
     expect(progressBps(s)).toBe(0n);
     expect(marketCapUsdg(s, TOTAL_SUPPLY)).toBe((price18(s) * TOTAL_SUPPLY) / 10n ** 30n);
   });
@@ -46,17 +46,17 @@ describe("prices and quotes", () => {
     expect(q.fee).toBe(USDG(1));
     expect(q.usdgUsed).toBe(USDG(99));
     expect(q.refund).toBe(0n);
-    // tokensOut = t − ceil(k / (u + 99)) with u = 4231.5, t = 1,073M
-    const u = USDG(4231.5), t = P.virtualTokens, k = u * t;
+    // tokensOut = t − ceil(k / (u + 99)) with u = 853.125, t = 1,073M
+    const u = USDG(853.125), t = P.virtualTokens, k = u * t;
     const expected = t - ((k - 1n) / (u + USDG(99)) + 1n);
     expect(q.tokensOut).toBe(expected);
-    expect(q.tokensOut).toBeGreaterThan(24_000_000n * WAD); // ≈ 24.5M tokens
-    expect(q.tokensOut).toBeLessThan(25_000_000n * WAD);
+    expect(q.tokensOut).toBeGreaterThan(111_000_000n * WAD); // ≈ 111.6M tokens
+    expect(q.tokensOut).toBeLessThan(112_000_000n * WAD);
     expect(q.priceAfter18).toBeGreaterThan(price18(s));
     expect(q.priceImpactBps).toBeGreaterThan(0n);
-    // 99 USDG on a 4,231.5 USDG virtual reserve moves the average price by ~2.3%
-    expect(q.priceImpactBps).toBeGreaterThan(200n);
-    expect(q.priceImpactBps).toBeLessThan(260n);
+    // 99 USDG on an 853 USDG virtual reserve moves the average price by ~11.6%
+    expect(q.priceImpactBps).toBeGreaterThan(1100n);
+    expect(q.priceImpactBps).toBeLessThan(1200n);
     const after = applyBuy(s, q);
     expect(progressBps(after)).toBe((q.tokensOut * BPS) / P.curveSupply);
   });
@@ -75,7 +75,7 @@ describe("prices and quotes", () => {
   it("price is monotonic over a sequence of buys", () => {
     let st = s, last = price18(st);
     for (let i = 0; i < 20; i++) {
-      const q = quoteBuy(st, USDG(250));
+      const q = quoteBuy(st, USDG(100)); // 2,000 USDG in total: stays below the 2,500 sell-out
       st = applyBuy(st, q);
       expect(price18(st)).toBeGreaterThan(last);
       last = price18(st);
@@ -91,7 +91,7 @@ describe("prices and quotes", () => {
     const r = usdgForTokens(s, want)!;
     const q = quoteBuy(s, r.usdgIn);
     expect(q.tokensOut).toBeGreaterThanOrEqual(want);
-    expect(q.tokensOut - want).toBeLessThan(WAD); // within one whole token of rounding
+    expect(q.tokensOut - want).toBeLessThan(want / 1_000_000n); // ceil-division rounding: a few wei per token
     expect(usdgForTokens(s, P.curveSupply + 1n)).toBeNull();
   });
 });
@@ -99,20 +99,20 @@ describe("prices and quotes", () => {
 describe("batch settlement", () => {
   const s = initialState(P);
   it("fills the whole batch at one clearing price and shares it pro-rata", () => {
-    const batch = USDG(2_000);
+    const batch = USDG(1_000);
     const r = settleBatch(s, batch);
-    expect(r.fee).toBe(USDG(20));
-    expect(r.usdgUsed).toBe(USDG(1_980));
+    expect(r.fee).toBe(USDG(10));
+    expect(r.usdgUsed).toBe(USDG(990));
     expect(r.refund).toBe(0n);
     expect(r.graduates).toBe(false);
     expect(r.clearingPrice18).toBe((r.usdgUsed * 10n ** 30n) / r.tokensOut);
-    const a = claimShare(r, batch, USDG(1_500)), b = claimShare(r, batch, USDG(500));
+    const a = claimShare(r, batch, USDG(750)), b = claimShare(r, batch, USDG(250));
     expect(a.tokensOut + b.tokensOut).toBeLessThanOrEqual(r.tokensOut);
     expect(r.tokensOut - (a.tokensOut + b.tokensOut)).toBeLessThan(2n);
     expect(a.tokensOut).toBe((r.tokensOut * 3n) / 4n);
   });
   it("a batch bigger than the curve sells it out and refunds the rest", () => {
-    const batch = USDG(20_000);
+    const batch = USDG(5_000);
     const r = settleBatch(s, batch);
     expect(r.usdgUsed).toBe(P.graduationUsdg);
     expect(r.tokensOut).toBe(P.curveSupply);
@@ -135,15 +135,15 @@ describe("fees and graduation", () => {
     const s = initialState(P);
     const g = graduationPlan(s, { graduationFeeBps: 200, floorBps: 1500, lpSupply: P.lpSupply, totalSupply: TOTAL_SUPPLY });
     expect(g.raised).toBe(P.graduationUsdg);
-    expect(g.graduationFee).toBe(USDG(248));
-    expect(g.floorUsdg).toBe(USDG(1_860));
-    expect(g.liquidityUsdg).toBe(USDG(12_400 - 248 - 1_860));
+    expect(g.graduationFee).toBe(USDG(50));
+    expect(g.floorUsdg).toBe(USDG(375));
+    expect(g.liquidityUsdg).toBe(USDG(2_500 - 50 - 375));
     expect(g.liquidityTokens).toBe(P.lpSupply);
-    // top-of-curve price: (4231.5 + 12400) / (1073M − 800M) = 0.0000609… USDG
-    expect(g.priceAtGraduation18).toBe(((USDG(4231.5) + P.graduationUsdg) * 10n ** 30n) / (P.virtualTokens - P.curveSupply));
+    // top-of-curve price: (853.125 + 2500) / (1073M − 800M) = 0.0000123… USDG
+    expect(g.priceAtGraduation18).toBe(((USDG(853.125) + P.graduationUsdg) * 10n ** 30n) / (P.virtualTokens - P.curveSupply));
     expect(g.marketCapUsdg).toBe((g.priceAtGraduation18 * TOTAL_SUPPLY) / 10n ** 30n);
-    expect(g.marketCapUsdg).toBeGreaterThan(USDG(60_000));
-    expect(g.marketCapUsdg).toBeLessThan(USDG(61_000));
+    expect(g.marketCapUsdg).toBeGreaterThan(USDG(12_200));
+    expect(g.marketCapUsdg).toBeLessThan(USDG(12_300));
     expect(g.poolPrice18).toBe((g.liquidityUsdg * 10n ** 30n) / P.lpSupply);
     expect(g.floorPrice18).toBe((g.floorUsdg * 10n ** 30n) / TOTAL_SUPPLY);
   });
