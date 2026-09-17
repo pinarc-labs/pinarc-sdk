@@ -1,0 +1,35 @@
+{
+  "name": "@pinarc-labs/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for Pinarc, the USDG launchpad on Robinhood Chain: contract ABIs and addresses, the exact bonding-curve maths, launch/trade/lock actions, event decoding and a typed client for the public API.",
+  "license": "MIT",
+  "type": "module",
+  "repository": { "type": "git", "url": "git+https://github.com/pinarc-labs/pinarc-sdk.git" },
+  "homepage": "https://docs.pinarc.io/developers/integrate",
+  "keywords": ["pinarc", "robinhood-chain", "launchpad", "bonding-curve", "usdg", "viem"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "README.md", "LICENSE"],
+  "sideEffects": false,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:live": "PINARC_LIVE=1 vitest run test/live.test.ts",
+    "gen-abi": "node scripts/gen-abi.mjs"
+  },
+  "dependencies": {
+    "@pinarc-labs/robinhood-chain-kit": "file:../robinhood-chain-kit"
+  },
+  "peerDependencies": { "viem": "^2.0.0" },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3",
+    "viem": "^2.56.5",
+    "vitest": "^3.2.4"
+  }
+}

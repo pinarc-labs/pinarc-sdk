@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+# @pinarc-labs/robinhood-chain-kit is consumed via file:../robinhood-chain-kit until it is on npm,
+# so CI checks out both repos side by side and builds the kit first.
+defaults:
+  run:
+    working-directory: main
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: main
+      - uses: actions/checkout@v4
+        with:
+          repository: pinarc-labs/robinhood-chain-kit
+          path: robinhood-chain-kit
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: main/pnpm-lock.yaml
+      - name: Build robinhood-chain-kit
+        working-directory: robinhood-chain-kit
+        run: pnpm install --frozen-lockfile && pnpm build
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
