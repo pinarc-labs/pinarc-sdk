@@ -7,4 +7,6 @@ export { CreatorBondAbi } from "./CreatorBond.js";
 export { FloorReserveAbi } from "./FloorReserve.js";
 export { LPLockerAbi } from "./LPLocker.js";
 export { VestingVaultAbi } from "./VestingVault.js";
+export { FeePolicyAbi } from "./FeePolicy.js";
+export { RewardsDistributorAbi } from "./RewardsDistributor.js";
 export { erc20Abi } from "./erc20.js";

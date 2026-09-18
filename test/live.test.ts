@@ -26,3 +26,19 @@ describe.skipIf(!process.env.PINARC_LIVE)("live", () => {
     expect((await api.health()).ok).toBe(true);
   }, 60_000);
 });
+
+describe.skipIf(!process.env.PINARC_LIVE)("live v2", () => {
+  it("reads the FeePolicy tiers and referral share from mainnet", async () => {
+    const publicClient = createPublicClient({ chain: robinhoodChain, transport: createFallbackTransport() });
+    const pinarc = createPinarcClient({ publicClient, addresses: MAINNET });
+    const fp = (await pinarc.getFeePolicy())!;
+    expect(fp.pina.toLowerCase()).toBe(MAINNET.pina!.toLowerCase());
+    expect(fp.referralShareBps).toBe(2000);
+    expect(fp.tiers).toEqual([{ minBalance: 5_000_000n * 10n ** 9n, discountBps: 5000 }, { minBalance: 500_000n * 10n ** 9n, discountBps: 2500 }]);
+    const all = await pinarc.getAllTokens();
+    expect(all.length).toBeGreaterThanOrEqual(6);
+    const v1 = all.find((t) => t.factory === MAINNET.factoryV1), v2 = all.find((t) => t.factory === MAINNET.factory);
+    if (v2) expect(await pinarc.feeBpsFor(await pinarc.getCurveOf(v2.token), "0x0000000000000000000000000000000000000001")).toBe(100);
+    if (v1) expect(await pinarc.feeBpsFor(await pinarc.getCurveOf(v1.token), "0x0000000000000000000000000000000000000001")).toBe(100);
+  }, 90_000);
+});

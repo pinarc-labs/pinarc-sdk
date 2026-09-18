@@ -37,6 +37,11 @@ export const PinarcFactoryAbi = [
         "name": "vault_",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "policy_",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -223,6 +228,19 @@ export const PinarcFactoryAbi = [
   {
     "type": "function",
     "name": "locker",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "policy",
     "inputs": [],
     "outputs": [
       {

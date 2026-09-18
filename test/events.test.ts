@@ -7,8 +7,11 @@ const log = (over: Partial<Log>): Log => ({ address: A, blockNumber: 1n, blockHa
 
 describe("events", () => {
   it("lists every protocol event by source", () => {
-    expect(PINARC_EVENTS.curve.map((e) => e.name).sort()).toEqual(["BatchClaimed", "BatchCommitted", "BatchSettled", "Graduated", "Launched", "Trade"]);
+    expect(PINARC_EVENTS.curve.map((e) => e.name).sort()).toEqual(["BatchClaimed", "BatchCommitted", "BatchSettled", "Graduated", "Launched", "ReferralPaid", "Trade"]);
     expect(PINARC_EVENTS.factory.map((e) => e.name)).toEqual(["TokenCreated"]);
+    expect(PINARC_EVENTS.curve.map((e) => e.name)).toContain("ReferralPaid");
+    expect(PINARC_EVENTS.policy.map((e) => e.name).sort()).toEqual(["FactorySet", "OwnershipTransferStarted", "OwnershipTransferred", "ReferralShareSet", "ReferrerBound", "TiersSet"]);
+    expect(PINARC_EVENTS.rewards.map((e) => e.name)).toContain("Claimed");
     expect(eventTopic("curve", "Trade")).toMatch(/^0x[0-9a-f]{64}$/);
     expect(() => eventTopic("curve", "Nope")).toThrow();
   });

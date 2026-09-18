@@ -1,6 +1,6 @@
 import { parseEventLogs, type Address, type Hash, type Hex, type PublicClient, type WalletClient } from "viem";
-import { BondingCurveAbi, CreatorBondAbi, FloorReserveAbi, LPLockerAbi, PinarcConfigAbi, PinarcFactoryAbi, PinarcTokenAbi, VestingVaultAbi, erc20Abi } from "./abi/index.js";
-import { MAINNET, type PinarcAddresses } from "./addresses.js";
+import { BondingCurveAbi, CreatorBondAbi, FeePolicyAbi, FloorReserveAbi, LPLockerAbi, PinarcConfigAbi, PinarcFactoryAbi, PinarcTokenAbi, RewardsDistributorAbi, VestingVaultAbi, erc20Abi } from "./abi/index.js";
+import { MAINNET, allFactories, type PinarcAddresses } from "./addresses.js";
 import { quoteBuy as quoteBuyLocal, quoteSell as quoteSellLocal, type CurveState } from "./curve.js";
 
 export type PinarcClientConfig = {
@@ -62,9 +62,10 @@ export type LaunchRequest = {
   devBuyUsdg?: bigint;
 };
 
-export type TxOptions = { to?: Address; slippageBps?: number; deadlineSeconds?: number };
+export type TxOptions = { to?: Address; slippageBps?: number; deadlineSeconds?: number; /** v2 curves: bind this referrer on the buyer's first referred trade (`buyReferred`). */ referrer?: Address };
 
 const WAD = 10n ** 18n;
+const ZERO: Address = "0x0000000000000000000000000000000000000000";
 
 export function createPinarcClient(cfg: PinarcClientConfig) {
   const { publicClient } = cfg;
@@ -110,24 +111,69 @@ export function createPinarcClient(cfg: PinarcClientConfig) {
       };
     },
 
-    /** Addresses of every token launched through the factory (paged). */
-    async getTokens(offset = 0, limit = 100): Promise<Address[]> {
-      const total = Number(await publicClient.readContract({ address: addresses.factory, abi: PinarcFactoryAbi, functionName: "allTokensLength" }));
+    /** Addresses of every token launched through a given factory (paged); defaults to the current one. */
+    async getTokens(offset = 0, limit = 100, factory: Address = addresses.factory): Promise<Address[]> {
+      const total = Number(await publicClient.readContract({ address: factory, abi: PinarcFactoryAbi, functionName: "allTokensLength" }));
       const end = Math.min(total, offset + limit);
       if (end <= offset) return [];
       const res = await publicClient.multicall({
-        contracts: Array.from({ length: end - offset }, (_, i) => ({ address: addresses.factory, abi: PinarcFactoryAbi, functionName: "allTokens", args: [BigInt(offset + i)] })),
+        contracts: Array.from({ length: end - offset }, (_, i) => ({ address: factory, abi: PinarcFactoryAbi, functionName: "allTokens", args: [BigInt(offset + i)] })),
         allowFailure: false,
       });
       return res as Address[];
     },
 
-    getTokenCount(): Promise<bigint> {
-      return publicClient.readContract({ address: addresses.factory, abi: PinarcFactoryAbi, functionName: "allTokensLength" });
+    /** Every token on the deployment, v2 factory first, then v1. */
+    async getAllTokens(): Promise<{ token: Address; factory: Address }[]> {
+      const out: { token: Address; factory: Address }[] = [];
+      for (const factory of allFactories(addresses)) {
+        const n = Number(await publicClient.readContract({ address: factory, abi: PinarcFactoryAbi, functionName: "allTokensLength" }));
+        for (let offset = 0; offset < n; offset += 200) for (const token of await client.getTokens(offset, 200, factory)) out.push({ token, factory });
+      }
+      return out;
     },
 
-    getCurveOf(token: Address): Promise<Address> {
-      return publicClient.readContract({ address: addresses.factory, abi: PinarcFactoryAbi, functionName: "curveOf", args: [token] });
+    getTokenCount(factory: Address = addresses.factory): Promise<bigint> {
+      return publicClient.readContract({ address: factory, abi: PinarcFactoryAbi, functionName: "allTokensLength" });
+    },
+
+    /** Curve of a token, looked up on the v2 factory then the v1 factory. Zero address when unknown. */
+    async getCurveOf(token: Address): Promise<Address> {
+      for (const factory of allFactories(addresses)) {
+        const curve = await publicClient.readContract({ address: factory, abi: PinarcFactoryAbi, functionName: "curveOf", args: [token] });
+        if (curve !== ZERO) return curve;
+      }
+      return ZERO;
+    },
+
+    // ---------------------------------------------------- fee policy (v2)
+
+    /** The fee (bps) `trader` currently pays on `curve`: base fee after their $PINA tier (v1 curves: base fee). */
+    async feeBpsFor(curve: Address, trader: Address): Promise<number> {
+      try {
+        return Number(await publicClient.readContract({ address: curve, abi: BondingCurveAbi, functionName: "feeBpsFor", args: [trader] }));
+      } catch {
+        return Number(await publicClient.readContract({ address: curve, abi: BondingCurveAbi, functionName: "tradeFeeBps" }));
+      }
+    },
+
+    /** Live tier table and referral share from FeePolicy (null when the deployment has none). */
+    async getFeePolicy() {
+      if (!addresses.feePolicy) return null;
+      const fp = { address: addresses.feePolicy, abi: FeePolicyAbi } as const;
+      const [n, referralShareBps, pina] = await Promise.all([
+        publicClient.readContract({ ...fp, functionName: "tiersLength" }),
+        publicClient.readContract({ ...fp, functionName: "referralShareBps" }),
+        publicClient.readContract({ ...fp, functionName: "pina" }),
+      ]);
+      const tiers = await Promise.all(Array.from({ length: Number(n) }, (_, i) => publicClient.readContract({ ...fp, functionName: "tiers", args: [BigInt(i)] })));
+      return { pina, referralShareBps: Number(referralShareBps), tiers: tiers.map(([minBalance, discountBps]) => ({ minBalance, discountBps: Number(discountBps) })) };
+    },
+
+    /** The referrer bound to `wallet` (zero address = none). */
+    async referrerOf(wallet: Address): Promise<Address> {
+      if (!addresses.feePolicy) return ZERO;
+      return publicClient.readContract({ address: addresses.feePolicy, abi: FeePolicyAbi, functionName: "referrerOf", args: [wallet] });
     },
 
     async getTokenInfo(token: Address) {
@@ -245,16 +291,21 @@ export function createPinarcClient(cfg: PinarcClientConfig) {
     /** Buy with `usdgIn`; `minTokensOut` comes from a local quote minus `slippageBps` (default 50 = 0.5%). */
     async buy(curve: Address, usdgIn: bigint, opts: TxOptions = {}) {
       const state = await client.readCurve(curve);
+      state.tradeFeeBps = await client.feeBpsFor(curve, wallet().account.address); // the trader's tiered fee (v2)
       const q = quoteBuyLocal(state, usdgIn);
       const minTokensOut = (q.tokensOut * (10_000n - BigInt(opts.slippageBps ?? 50))) / 10_000n;
       await ensureAllowance(addresses.usdg, curve, usdgIn);
-      const hash = await write({ address: curve, abi: BondingCurveAbi, functionName: "buy", args: [usdgIn, minTokensOut, opts.to ?? wallet().account.address] });
+      const to = opts.to ?? wallet().account.address;
+      const hash = opts.referrer
+        ? await write({ address: curve, abi: BondingCurveAbi, functionName: "buyReferred", args: [usdgIn, minTokensOut, to, opts.referrer] })
+        : await write({ address: curve, abi: BondingCurveAbi, functionName: "buy", args: [usdgIn, minTokensOut, to] });
       return { hash, quote: q, minTokensOut };
     },
 
     /** Sell `tokensIn`; `minUsdgOut` from a local quote minus `slippageBps`. */
     async sell(curve: Address, tokensIn: bigint, opts: TxOptions = {}) {
       const state = await client.readCurve(curve);
+      state.tradeFeeBps = await client.feeBpsFor(curve, wallet().account.address);
       const q = quoteSellLocal(state, tokensIn);
       const minUsdgOut = (q.usdgOut * (10_000n - BigInt(opts.slippageBps ?? 50))) / 10_000n;
       await ensureAllowance(state.token, curve, tokensIn);
@@ -291,6 +342,22 @@ export function createPinarcClient(cfg: PinarcClientConfig) {
     releaseBond(token: Address) {
       return write({ address: addresses.creatorBond, abi: CreatorBondAbi, functionName: "release", args: [token] });
     },
+    // ------------------------------------------------------ rewards (v2)
+
+    async getRewardRound(roundId: bigint) {
+      if (!addresses.rewardsDistributor) throw new Error("no RewardsDistributor on this deployment");
+      return publicClient.readContract({ address: addresses.rewardsDistributor, abi: RewardsDistributorAbi, functionName: "rounds", args: [roundId] });
+    },
+    isRewardClaimed(roundId: bigint, index: bigint): Promise<boolean> {
+      if (!addresses.rewardsDistributor) throw new Error("no RewardsDistributor on this deployment");
+      return publicClient.readContract({ address: addresses.rewardsDistributor, abi: RewardsDistributorAbi, functionName: "isClaimed", args: [roundId, index] });
+    },
+    /** Claim a Merkle allocation (leaf = keccak256(abi.encodePacked(index, account, amount)), sorted pairs). Anyone may submit it. */
+    claimReward(roundId: bigint, index: bigint, account: Address, amount: bigint, proof: Hex[]) {
+      if (!addresses.rewardsDistributor) throw new Error("no RewardsDistributor on this deployment");
+      return write({ address: addresses.rewardsDistributor, abi: RewardsDistributorAbi, functionName: "claim", args: [roundId, index, account, amount, proof] });
+    },
+
     setMetadataURI(token: Address, uri: string) {
       return write({ address: token, abi: PinarcTokenAbi, functionName: "setMetadataURI", args: [uri] });
     },

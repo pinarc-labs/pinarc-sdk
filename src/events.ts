@@ -1,8 +1,8 @@
 import { decodeEventLog, toEventSelector, type AbiEvent, type Address, type Hex, type Log } from "viem";
-import { BondingCurveAbi, CreatorBondAbi, FloorReserveAbi, LPLockerAbi, PinarcFactoryAbi, PinarcTokenAbi, VestingVaultAbi } from "./abi/index.js";
+import { BondingCurveAbi, CreatorBondAbi, FeePolicyAbi, FloorReserveAbi, LPLockerAbi, PinarcFactoryAbi, PinarcTokenAbi, RewardsDistributorAbi, VestingVaultAbi } from "./abi/index.js";
 
 /** Which contract family emits an event; disambiguates e.g. CreatorBond.Released from VestingVault.Released. */
-export type EventSource = "factory" | "curve" | "bond" | "floor" | "locker" | "vault" | "token";
+export type EventSource = "factory" | "curve" | "bond" | "floor" | "locker" | "vault" | "token" | "policy" | "rewards";
 
 type AbiWithEvents = readonly { type: string; name?: string }[];
 const eventsOf = (abi: AbiWithEvents): AbiEvent[] => abi.filter((i): i is AbiEvent => i.type === "event");
@@ -16,6 +16,8 @@ export const PINARC_EVENTS: Record<EventSource, AbiEvent[]> = {
   locker: eventsOf(LPLockerAbi),
   vault: eventsOf(VestingVaultAbi),
   token: eventsOf(PinarcTokenAbi),
+  policy: eventsOf(FeePolicyAbi),
+  rewards: eventsOf(RewardsDistributorAbi),
 };
 
 const BY_TOPIC = new Map<Hex, { source: EventSource; event: AbiEvent }[]>();
@@ -41,7 +43,7 @@ export type DecodedPinarcEvent = {
 };
 
 /** Contracts whose address pins the source; curve/token logs come from per-launch clones and are matched by topic. */
-export type KnownAddresses = Partial<Record<Exclude<EventSource, "curve" | "token">, Address>>;
+export type KnownAddresses = Partial<Record<Exclude<EventSource, "curve" | "token">, Address | undefined>>;
 
 /**
  * Decode Pinarc logs into `{ source, name, args }` records, sorted by block and log index. Unknown topics are

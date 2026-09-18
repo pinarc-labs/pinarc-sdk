@@ -87,6 +87,20 @@ for (const e of decodePinarcLogs(logs, { factory: MAINNET.factory })) console.lo
 
 `PINARC_EVENTS.curve` (`Launched`, `BatchCommitted`, `BatchSettled`, `BatchClaimed`, `Trade`, `Graduated`), `.bond`, `.floor`, `.locker`, `.vault`, `.token` give you the ABI events for any filter. See [pinarc-indexer](https://github.com/pinarc-labs/pinarc-indexer) for a full chain → SQLite pipeline built on this.
 
+## v2: fee tiers, referrals, rewards (2026-09-18)
+
+`MAINNET` points at the v2 factory/curve/bond and carries `factoryV1` etc. for the launches made before it; `getAllTokens()` walks both factories and `getCurveOf()` checks both.
+
+```ts
+await pinarc.getFeePolicy();                 // { pina, referralShareBps: 2000, tiers: [{ minBalance: 5M $PINA, discountBps: 5000 }, { 500K, 2500 }] }
+await pinarc.feeBpsFor(curve, wallet);       // 100 | 75 | 50 on a v2 curve; 100 on v1
+await pinarc.buy(curve, usdgIn, { referrer });   // sends buyReferred: binds the referrer on the wallet's first referred trade
+await pinarc.referrerOf(wallet);             // bound referrer or the zero address
+await pinarc.claimReward(roundId, index, account, amount, proof);   // RewardsDistributor Merkle claim
+```
+
+`buy`/`sell` quote with the connected wallet's tiered fee, so `minTokensOut` / `minUsdgOut` match what the curve will charge. `PINARC_EVENTS.policy` (`ReferrerBound`, `TiersSet`, …) and `PINARC_EVENTS.rewards` (`RoundCreated`, `Claimed`, `Swept`) join the decoder; `curve.ReferralPaid` is decoded with the other curve events.
+
 ## Public API
 
 ```ts

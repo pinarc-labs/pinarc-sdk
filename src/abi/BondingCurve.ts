@@ -141,6 +141,40 @@ export const BondingCurveAbi = [
   },
   {
     "type": "function",
+    "name": "buyReferred",
+    "inputs": [
+      {
+        "name": "usdgIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minTokensOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "referrer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "tokensOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "claimBatch",
     "inputs": [],
     "outputs": [
@@ -267,6 +301,25 @@ export const BondingCurveAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "feeBpsFor",
+    "inputs": [
+      {
+        "name": "trader",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
       }
     ],
     "stateMutability": "view"
@@ -500,6 +553,11 @@ export const BondingCurveAbi = [
             "name": "teamDuration",
             "type": "uint64",
             "internalType": "uint64"
+          },
+          {
+            "name": "policy",
+            "type": "address",
+            "internalType": "address"
           }
         ]
       }
@@ -652,6 +710,19 @@ export const BondingCurveAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "policy",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract FeePolicy"
       }
     ],
     "stateMutability": "view"
@@ -1072,6 +1143,31 @@ export const BondingCurveAbi = [
         "type": "uint64",
         "indexed": false,
         "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ReferralPaid",
+    "inputs": [
+      {
+        "name": "referrer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "trader",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
